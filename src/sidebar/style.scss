@@ -1,0 +1,153 @@
+// Custom styling for the product sidebar panels
+.product-type-panel,
+.product-gallery-panel,
+.product-pricing-panel,
+.product-inventory-panel,
+.product-shipping-panel,
+.product-short-description-panel,
+.product-reviews-panel,
+.product-advanced-panel {
+    
+    .components-panel__body-title {
+        button {
+            font-weight: 600;
+            font-size: 14px;
+        }
+    }
+    
+    .components-base-control {
+        margin-bottom: 16px;
+
+        &:last-child {
+            margin-bottom: 0;
+        }
+    }
+
+    .components-base-control__label {
+        font-weight: 500;
+        color: #1e1e1e;
+        margin-bottom: 8px;
+    }
+
+    .components-base-control__help {
+        font-size: 12px;
+        color: #757575;
+        margin-top: 4px;
+    }
+
+    input[type="number"],
+    input[type="text"],
+    select,
+    textarea {
+        border-radius: 4px;
+        border: 1px solid #ddd;
+        
+        &:focus {
+            border-color: #007cba;
+            box-shadow: 0 0 0 1px #007cba;
+        }
+    }
+
+    .components-toggle-control {
+        .components-form-toggle {
+            margin-right: 12px;
+        }
+    }
+}
+
+// Grid layout for dimensions
+.dimensions-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+
+    .components-base-control {
+        margin-bottom: 0;
+    }
+}
+
+// Price fields with currency symbol
+.product-pricing-panel {
+    input[type="number"] {
+        padding-left: 24px;
+    }
+}
+
+// Collapsible sections
+.components-panel__body {
+    border-top: 1px solid #e0e0e0;
+    
+    &:first-child {
+        border-top: none;
+    }
+}
+
+// Better spacing in panels
+.edit-post-sidebar .components-panel__body-content {
+    padding: 16px;
+}
+
+// Hide WordPress default gallery panel if it appears
+[aria-label="Featured Image"] ~ [aria-label="Product Gallery"],
+.components-panel-body:has([aria-label="Product Gallery"]) {
+    &:not(.product-gallery-panel) {
+        display: none !important;
+    }
+}
+
+// Hide all panel titles (h2) - only show button text
+.product-type-panel h2,
+.product-gallery-panel h2,
+.product-pricing-panel h2,
+.product-inventory-panel h2,
+.product-shipping-panel h2,
+.product-short-description-panel h2,
+.product-reviews-panel h2,
+.product-advanced-panel h2 {
+    display: none !important;
+}
+
+// Make sure all panels and their body containers are visible even when closed
+.product-type-panel,
+.product-gallery-panel,
+.product-pricing-panel,
+.product-inventory-panel,
+.product-shipping-panel,
+.product-short-description-panel,
+.product-reviews-panel,
+.product-advanced-panel {
+    display: block !important;
+    
+    // Ensure the panel body container is always visible
+    .components-panel__body {
+        display: block !important;
+        
+        .components-panel__body-title {
+            display: flex !important;
+        }
+    }
+}
+
+// Make sure button text is consistent
+.product-type-panel .components-panel__body-toggle,
+.product-gallery-panel .components-panel__body-toggle,
+.product-pricing-panel .components-panel__body-toggle,
+.product-inventory-panel .components-panel__body-toggle,
+.product-shipping-panel .components-panel__body-toggle,
+.product-short-description-panel .components-panel__body-toggle,
+.product-reviews-panel .components-panel__body-toggle,
+.product-advanced-panel .components-panel__body-toggle {
+    font-size: 14px;
+    font-weight: 600;
+    padding: 8px 0;
+    width: 100%;
+    
+    &[aria-expanded="true"] {
+        color: #2c3e50;
+    }
+    
+    &[aria-expanded="false"] {
+        color: #646970;
+    }
+}

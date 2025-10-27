@@ -1,0 +1,29 @@
+{
+  "name": "product-studio",
+  "version": "1.0.0",
+  "description": "WooCommerce Block Editor Sidebar Plugin",
+  "scripts": {
+    "start": "wp-scripts start src/sidebar/index.js --output-path=build",
+    "build": "wp-scripts build src/sidebar/index.js --output-path=build"
+  },
+  "keywords": [
+    "wordpress",
+    "woocommerce",
+    "gutenberg",
+    "block-editor"
+  ],
+  "author": "",
+  "license": "GPL-2.0-or-later",
+  "devDependencies": {
+    "@wordpress/scripts": "^27.0.0"
+  },
+  "dependencies": {
+    "@wordpress/components": "^28.0.0",
+    "@wordpress/data": "^10.0.0",
+    "@wordpress/edit-post": "^8.0.0",
+    "@wordpress/element": "^6.0.0",
+    "@wordpress/i18n": "^5.0.0",
+    "@wordpress/plugins": "^7.0.0"
+  }
+}
+
