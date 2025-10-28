@@ -1,1 +1,14 @@
 // Core WordPress styles only
+
+// Add loading indicator only to taxonomy panels (brands, categories, tags) while loading
+.components-panel__body[class*="taxonomy"] .components-panel__body-content:empty::before,
+.components-panel__body[class*="category"] .components-panel__body-content:empty::before,
+.components-panel__body[class*="tag"] .components-panel__body-content:empty::before,
+.components-panel__body[class*="brand"] .components-panel__body-content:empty::before {
+    content: "Loading...";
+    display: block;
+    color: #757575;
+    font-size: 13px;
+    padding: 8px;
+    text-align: center;
+}

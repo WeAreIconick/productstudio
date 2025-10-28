@@ -171,6 +171,47 @@ function product_studio_register_meta() {
 add_action('init', 'product_studio_register_meta');
 
 /**
+ * Cache REST API taxonomy responses for performance
+ */
+function product_studio_cache_rest_taxonomy_response($response, $handler, $request) {
+    $route = $request->get_route();
+    $taxonomies = ['product_cat', 'product_tag'];
+    
+    foreach ($taxonomies as $taxonomy) {
+        if (strpos($route, '/wp/v2/' . $taxonomy) !== false && !is_wp_error($response)) {
+            // Cache the response data for 1 hour
+            $cache_key = 'rest_tax_' . $taxonomy . '_' . md5($route . serialize($request->get_query_params()));
+            
+            $data = $response->get_data();
+            if (!empty($data) && is_array($data) && count($data) > 50) {
+                // Limit to 50 items
+                $data = array_slice($data, 0, 50);
+                $response->set_data($data);
+            }
+            
+            set_transient($cache_key, $data, HOUR_IN_SECONDS);
+            break;
+        }
+    }
+    
+    return $response;
+}
+add_filter('rest_post_dispatch', 'product_studio_cache_rest_taxonomy_response', 10, 3);
+
+/**
+ * Optimize REST API for taxonomy queries - limit results to improve performance
+ */
+function product_studio_optimize_taxonomy_args($args, $request) {
+    // Force limit to 50 terms max
+    $args['number'] = 50;
+    $args['hide_empty'] = true; // Only show terms with posts
+    $args['fields'] = 'all'; // Get all needed fields at once
+    return $args;
+}
+add_filter('rest_product_cat_query', 'product_studio_optimize_taxonomy_args', 10, 2);
+add_filter('rest_product_tag_query', 'product_studio_optimize_taxonomy_args', 10, 2);
+
+/**
  * Enqueue sidebar assets
  */
 function product_studio_enqueue_assets() {

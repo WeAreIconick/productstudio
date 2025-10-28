@@ -1,6 +1,6 @@
 import { registerPlugin } from '@wordpress/plugins';
 import { PluginDocumentSettingPanel } from '@wordpress/edit-post';
-import { TextControl, SelectControl, ToggleControl, CheckboxControl, TextareaControl, Button } from '@wordpress/components';
+import { TextControl, SelectControl, ToggleControl, CheckboxControl, TextareaControl, Button, Spinner } from '@wordpress/components';
 import { MediaUpload, MediaUploadCheck } from '@wordpress/block-editor';
 import { useSelect, useDispatch } from '@wordpress/data';
 import { __ } from '@wordpress/i18n';
