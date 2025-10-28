@@ -4,114 +4,29 @@ import { PanelBody, TextControl, SelectControl, ToggleControl, CheckboxControl, 
 import { MediaUpload, MediaUploadCheck } from '@wordpress/block-editor';
 import { useSelect, useDispatch } from '@wordpress/data';
 import { __ } from '@wordpress/i18n';
-import { useState, useEffect } from '@wordpress/element';
+import { useMemo } from '@wordpress/element';
 import './style.scss';
 
 const ProductDataSidebar = () => {
-    // Get current post ID, meta, and attributes
-    const { postId, meta, postType, status, date, password, slug, excerpt } = useSelect((select) => ({
-        postId: select('core/editor').getCurrentPostId(),
-        meta: select('core/editor').getEditedPostAttribute('meta'),
-        postType: select('core/editor').getCurrentPostType(),
-        status: select('core/editor').getEditedPostAttribute('status'),
-        date: select('core/editor').getEditedPostAttribute('date'),
-        password: select('core/editor').getEditedPostAttribute('password'),
-        slug: select('core/editor').getEditedPostAttribute('slug'),
-        excerpt: select('core/editor').getEditedPostAttribute('excerpt'),
-    }));
-
+    // Get post type first to early exit
+    const postType = useSelect((select) => select('core/editor').getCurrentPostType(), []);
+    
     // Only show for products
     if (postType !== 'product') {
         return null;
     }
     
-    // Close all panels on mount
-    useEffect(() => {
-        const closeAllPanels = () => {
-            const panelNames = [
-                'product-images',
-                'page-settings',
-                'product-type',
-                'product-pricing',
-                'product-inventory',
-                'product-shipping',
-                'product-short-description',
-                'product-reviews',
-                'product-advanced'
-            ];
-            
-            panelNames.forEach((name, index) => {
-                setTimeout(() => {
-                    const toggle = document.querySelector(`.components-panel__body-toggle[aria-controls*="${name}"]`);
-                    if (toggle) {
-                        // Close if expanded
-                        if (toggle.getAttribute('aria-expanded') === 'true') {
-                            toggle.click();
-                        }
-                    }
-                }, 100 * (index + 1));
-            });
-        };
-        
-        // Run after a delay to ensure component is mounted
-        const timer = setTimeout(closeAllPanels, 300);
-        return () => clearTimeout(timer);
-    }, []);
-
+    // Get only what we need from the editor - minimize subscriptions
+    const { meta, status, date, password, slug, excerpt } = useSelect((select) => ({
+        meta: select('core/editor').getEditedPostAttribute('meta'),
+        status: select('core/editor').getEditedPostAttribute('status'),
+        date: select('core/editor').getEditedPostAttribute('date'),
+        password: select('core/editor').getEditedPostAttribute('password'),
+        slug: select('core/editor').getEditedPostAttribute('slug'),
+        excerpt: select('core/editor').getEditedPostAttribute('excerpt'),
+    }), []);
+    
     const { editPost } = useDispatch('core/editor');
-    const { removeEditorPanel } = useDispatch('core/edit-post');
-
-    // Hide WordPress core panels using the WordPress API
-    useEffect(() => {
-        // Remove unwanted WordPress core panels
-        removeEditorPanel('featured-image'); // Featured Image panel
-        removeEditorPanel('post-excerpt');   // Excerpt panel
-        removeEditorPanel('post-status');    // Status panel
-        removeEditorPanel('post-link');      // Permalink panel
-        removeEditorPanel('page-attributes'); // Page attributes
-        
-        // Try alternative panel names
-        setTimeout(() => {
-            try {
-                removeEditorPanel('discussion-panel');
-            } catch (e) {
-                // Panel might not exist
-            }
-        }, 100);
-
-        // Hide read time and last edited info - very specific targeting
-        const hidePostInfo = () => {
-            document.querySelectorAll('*').forEach(el => {
-                // Skip if already processed or in our custom panels
-                if (el.hasAttribute('data-hidden-by-studio') || 
-                    el.closest('.product-images-panel, .page-settings-panel, .product-type-panel, .product-pricing-panel, .product-inventory-panel, .product-shipping-panel, .product-short-description-panel, .product-reviews-panel, .product-advanced-panel')) {
-                    return;
-                }
-
-                const text = el.textContent.trim().toLowerCase();
-                
-                // Only hide if exact match - very specific
-                if (text === 'minute read' || 
-                    text === 'last edited' ||
-                    text.includes('words,') || 
-                    text === 'words, 1 minute read time' ||
-                    text.includes('last edited an hour ago') ||
-                    text.includes('last edited 2 hours ago')) {
-                    
-                    // Make sure it's a small text element, not a large container
-                    if (el.offsetHeight < 50 && el.offsetWidth < 500) {
-                        el.style.cssText = 'display: none !important; visibility: hidden !important; height: 0 !important; overflow: hidden !important;';
-                        el.setAttribute('data-hidden-by-studio', 'true');
-                    }
-                }
-            });
-        };
-        
-        setTimeout(hidePostInfo, 50);
-        const infoInterval = setInterval(hidePostInfo, 200);
-        
-        return () => clearInterval(infoInterval);
-    }, []);
 
     // Helper to update meta
     const updateMeta = (key, value) => {
@@ -123,24 +38,24 @@ const ProductDataSidebar = () => {
         editPost({ [key]: value });
     };
     
-    // Get product type (simple, grouped, external, variable)
-    const productType = meta._product_type || 'simple';
+    // Memoize expensive calculations
+    const productType = useMemo(() => meta._product_type || 'simple', [meta._product_type]);
+    
+    const statusOptions = useMemo(() => [
+        { label: __('Draft', 'product-studio'), value: 'draft' },
+        { label: __('Pending', 'product-studio'), value: 'pending' },
+        { label: __('Private', 'product-studio'), value: 'private' },
+        { label: __('Published', 'product-studio'), value: 'publish' },
+    ], []);
+
+    const galleryImages = useMemo(() => {
+        return meta._product_image_gallery ? meta._product_image_gallery.split(',').filter(id => id) : [];
+    }, [meta._product_image_gallery]);
     
     // Helper to update product type
     const updateProductType = (newType) => {
         updateMeta('_product_type', newType);
     };
-
-    // Status options
-    const statusOptions = [
-        { label: __('Draft', 'product-studio'), value: 'draft' },
-        { label: __('Pending', 'product-studio'), value: 'pending' },
-        { label: __('Private', 'product-studio'), value: 'private' },
-        { label: __('Published', 'product-studio'), value: 'publish' },
-    ];
-
-    // Get product gallery images
-    const galleryImages = meta._product_image_gallery ? meta._product_image_gallery.split(',').filter(id => id) : [];
 
     // Helper to update gallery
     const updateGallery = (images) => {
@@ -296,6 +211,21 @@ const ProductDataSidebar = () => {
                     ]}
                     onChange={updateProductType}
                     help={__('Choose the product type', 'product-studio')}
+                />
+            </PluginDocumentSettingPanel>
+
+            <PluginDocumentSettingPanel
+                name="product-short-description"
+                title={__('Short Description', 'product-studio')}
+                className="product-short-description-panel"
+                initialOpen={false}
+            >
+                <TextareaControl
+                    label={__('Product Short Description', 'product-studio')}
+                    value={meta._excerpt || ''}
+                    onChange={(value) => updateMeta('_excerpt', value)}
+                    help={__('This appears below the product name. Used in product listings and search results.', 'product-studio')}
+                    rows={5}
                 />
             </PluginDocumentSettingPanel>
 
@@ -484,21 +414,6 @@ const ProductDataSidebar = () => {
                 />
             </PluginDocumentSettingPanel>
             )}
-
-            <PluginDocumentSettingPanel
-                name="product-short-description"
-                title={__('Short Description', 'product-studio')}
-                className="product-short-description-panel"
-                initialOpen={false}
-            >
-                <TextareaControl
-                    label={__('Product Short Description', 'product-studio')}
-                    value={meta._excerpt || ''}
-                    onChange={(value) => updateMeta('_excerpt', value)}
-                    help={__('This appears below the product name. Used in product listings and search results.', 'product-studio')}
-                    rows={5}
-                />
-            </PluginDocumentSettingPanel>
 
             <PluginDocumentSettingPanel
                 name="product-reviews"

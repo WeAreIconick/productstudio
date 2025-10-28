@@ -1,19 +1,1 @@
 // Core WordPress styles only
-
-// Hide read time and last edited info - target specific WordPress classes
-.edit-post-post-visibility,
-.editor-post-publish-date__label,
-.editor-post-last-revision__title,
-.editor-post-word-count,
-.components-panel__body-toggle[aria-label*="Visibility"],
-.components-panel__body[data-product-studio-hidden] {
-    display: none !important;
-}
-
-// Hide elements that contain read time text
-div[style*="font-size"]:empty,
-span:empty {
-    &:not(.product-images-panel *) {
-        display: none !important;
-    }
-}
