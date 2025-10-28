@@ -1,46 +1,19 @@
 // Core WordPress styles only
 
-// Hide WordPress core publish settings from document panel
-.components-panel {
-    // Hide excerpt section
-    .editor-post-excerpt__textarea {
-        display: none;
-    }
-    
-    // Hide slug section
-    .editor-post-slug {
-        display: none;
-    }
-    
-    // Hide status section  
-    .editor-post-status {
-        display: none;
-    }
-    
-    // Hide date/time section
-    .editor-post-schedule {
-        display: none;
-    }
-}
-
-// Hide specific sidebar panels
-.edit-post-sidebar__panel-tab .components-panel__body[class*="post-excerpt"],
-.edit-post-sidebar__panel-tab .components-panel__body[class*="post-status"],
-.edit-post-sidebar__panel-tab .components-panel__body[class*="post-date"],
-.edit-post-sidebar__panel-tab .components-panel__body[class*="post-slug"] {
+// Hide read time and last edited info - target specific WordPress classes
+.edit-post-post-visibility,
+.editor-post-publish-date__label,
+.editor-post-last-revision__title,
+.editor-post-word-count,
+.components-panel__body-toggle[aria-label*="Visibility"],
+.components-panel__body[data-product-studio-hidden] {
     display: none !important;
 }
 
-// Hide publish section elements
-.editor-post-publish-panel__prepublish div[class*="editor-post-visibility"],
-.editor-post-publish-panel__prepublish div[class*="editor-post-status"],
-.editor-post-publish-panel__prepublish div[class*="editor-post-date"],
-.editor-post-publish-panel__prepublish div[class*="editor-post-format"] {
-    display: none !important;
-}
-
-// Hide status badge at top
-.editor-post-preview__button ~ .components-button[class*="status"],
-.post-status-panel {
-    display: none !important;
+// Hide elements that contain read time text
+div[style*="font-size"]:empty,
+span:empty {
+    &:not(.product-images-panel *) {
+        display: none !important;
+    }
 }

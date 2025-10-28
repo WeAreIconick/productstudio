@@ -133,6 +133,7 @@ add_action('add_meta_boxes', function() {
 function product_studio_register_meta() {
     $meta_fields = [
         '_product_type' => 'string',
+        '_thumbnail_id' => 'string',
         '_product_image_gallery' => 'string',
         '_regular_price' => 'string',
         '_sale_price' => 'string',

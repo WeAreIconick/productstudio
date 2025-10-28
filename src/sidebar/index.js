@@ -29,9 +29,9 @@ const ProductDataSidebar = () => {
     useEffect(() => {
         const closeAllPanels = () => {
             const panelNames = [
+                'product-images',
                 'page-settings',
                 'product-type',
-                'product-gallery',
                 'product-pricing',
                 'product-inventory',
                 'product-shipping',
@@ -58,80 +58,60 @@ const ProductDataSidebar = () => {
         return () => clearTimeout(timer);
     }, []);
 
-    // Hide WordPress core publish settings
-    useEffect(() => {
-        const hideCoreSettings = () => {
-            // Hide panels with specific text content
-            const panelTexts = [
-                'Edit excerpt',
-                'Excerpt',
-                'Status',
-                'Date',
-                'Schedule',
-                'Slug',
-                'Publish date',
-            ];
+    const { editPost } = useDispatch('core/editor');
+    const { removeEditorPanel } = useDispatch('core/edit-post');
 
-            // Find all panel buttons and their parent panels
-            document.querySelectorAll('.components-panel__body-toggle').forEach(button => {
-                const text = button.textContent.trim();
-                if (panelTexts.some(panelText => text.includes(panelText))) {
-                    const parentPanel = button.closest('.components-panel__body');
-                    if (parentPanel && !parentPanel.classList.contains('page-settings-panel') 
-                        && !parentPanel.classList.contains('product-type-panel')
-                        && !parentPanel.classList.contains('product-gallery-panel')
-                        && !parentPanel.classList.contains('product-pricing-panel')
-                        && !parentPanel.classList.contains('product-inventory-panel')
-                        && !parentPanel.classList.contains('product-shipping-panel')
-                        && !parentPanel.classList.contains('product-short-description-panel')
-                        && !parentPanel.classList.contains('product-reviews-panel')
-                        && !parentPanel.classList.contains('product-advanced-panel')) {
-                        parentPanel.style.display = 'none';
+    // Hide WordPress core panels using the WordPress API
+    useEffect(() => {
+        // Remove unwanted WordPress core panels
+        removeEditorPanel('featured-image'); // Featured Image panel
+        removeEditorPanel('post-excerpt');   // Excerpt panel
+        removeEditorPanel('post-status');    // Status panel
+        removeEditorPanel('post-link');      // Permalink panel
+        removeEditorPanel('page-attributes'); // Page attributes
+        
+        // Try alternative panel names
+        setTimeout(() => {
+            try {
+                removeEditorPanel('discussion-panel');
+            } catch (e) {
+                // Panel might not exist
+            }
+        }, 100);
+
+        // Hide read time and last edited info - very specific targeting
+        const hidePostInfo = () => {
+            document.querySelectorAll('*').forEach(el => {
+                // Skip if already processed or in our custom panels
+                if (el.hasAttribute('data-hidden-by-studio') || 
+                    el.closest('.product-images-panel, .page-settings-panel, .product-type-panel, .product-pricing-panel, .product-inventory-panel, .product-shipping-panel, .product-short-description-panel, .product-reviews-panel, .product-advanced-panel')) {
+                    return;
+                }
+
+                const text = el.textContent.trim().toLowerCase();
+                
+                // Only hide if exact match - very specific
+                if (text === 'minute read' || 
+                    text === 'last edited' ||
+                    text.includes('words,') || 
+                    text === 'words, 1 minute read time' ||
+                    text.includes('last edited an hour ago') ||
+                    text.includes('last edited 2 hours ago')) {
+                    
+                    // Make sure it's a small text element, not a large container
+                    if (el.offsetHeight < 50 && el.offsetWidth < 500) {
+                        el.style.cssText = 'display: none !important; visibility: hidden !important; height: 0 !important; overflow: hidden !important;';
+                        el.setAttribute('data-hidden-by-studio', 'true');
                     }
                 }
             });
-
-            // Hide specific class names
-            const classSelectors = [
-                'editor-post-excerpt__panel',
-                'editor-post-status__panel',
-                'editor-post-schedule__panel',
-                'editor-post-slug__panel',
-                'editor-post-link__panel',
-                '.components-panel__body-toggle[aria-label*="excerpt"]',
-                '.components-panel__body-toggle[aria-label*="status" i]',
-                '.components-panel__body-toggle[aria-label*="schedule" i]',
-                '.components-panel__body-toggle[aria-label*="date" i]',
-                '.components-panel__body-toggle[aria-label*="slug" i]',
-            ];
-
-            classSelectors.forEach(selector => {
-                try {
-                    const elements = document.querySelectorAll(selector);
-                    elements.forEach(el => {
-                        if (!el.closest('.page-settings-panel, .product-type-panel, .product-gallery-panel, .product-pricing-panel, .product-inventory-panel, .product-shipping-panel, .product-short-description-panel, .product-reviews-panel, .product-advanced-panel')) {
-                            el.style.display = 'none';
-                            if (el.parentElement) {
-                                el.parentElement.style.display = 'none';
-                            }
-                        }
-                    });
-                } catch (e) {
-                    // Ignore invalid selectors
-                }
-            });
         };
-
-        // Run multiple times to catch elements
-        hideCoreSettings();
-        setTimeout(hideCoreSettings, 100);
-        setTimeout(hideCoreSettings, 500);
-        const timer = setInterval(hideCoreSettings, 1000);
         
-        return () => clearInterval(timer);
+        setTimeout(hidePostInfo, 50);
+        const infoInterval = setInterval(hidePostInfo, 200);
+        
+        return () => clearInterval(infoInterval);
     }, []);
-
-    const { editPost } = useDispatch('core/editor');
 
     // Helper to update meta
     const updateMeta = (key, value) => {
@@ -159,8 +139,101 @@ const ProductDataSidebar = () => {
         { label: __('Published', 'product-studio'), value: 'publish' },
     ];
 
+    // Get product gallery images
+    const galleryImages = meta._product_image_gallery ? meta._product_image_gallery.split(',').filter(id => id) : [];
+
+    // Helper to update gallery
+    const updateGallery = (images) => {
+        updateMeta('_product_image_gallery', images.join(','));
+    };
+
     return (
         <>
+            <PluginDocumentSettingPanel
+                name="product-images"
+                title={__('Product Images', 'product-studio')}
+                className="product-images-panel"
+                initialOpen={false}
+            >
+                <MediaUploadCheck>
+                    <MediaUpload
+                        onSelect={(media) => {
+                            updateMeta('_thumbnail_id', media.id.toString());
+                        }}
+                        allowedTypes={['image']}
+                        value={parseInt(meta._thumbnail_id || 0)}
+                        render={({ open }) => (
+                            <div 
+                                onClick={open}
+                                style={{
+                                    border: '2px dashed #ddd',
+                                    borderRadius: '4px',
+                                    padding: '20px',
+                                    textAlign: 'center',
+                                    cursor: 'pointer',
+                                    marginBottom: '16px',
+                                    minHeight: '120px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexDirection: 'column',
+                                    gap: '10px'
+                                }}
+                            >
+                                {meta._thumbnail_id ? (
+                                    <>
+                                        {__('Product image ID:', 'product-studio')} {meta._thumbnail_id}
+                                        <div style={{ fontSize: '12px', color: '#666' }}>
+                                            {__('Click to replace', 'product-studio')}
+                                        </div>
+                                    </>
+                                ) : __('Click to add product image', 'product-studio')}
+                            </div>
+                        )}
+                    />
+                </MediaUploadCheck>
+
+                <MediaUploadCheck>
+                    <MediaUpload
+                        onSelect={(media) => {
+                            const newGallery = [...galleryImages, media.id.toString()];
+                            updateGallery(newGallery);
+                        }}
+                        allowedTypes={['image']}
+                        multiple={true}
+                        gallery
+                        value={galleryImages.map(id => parseInt(id))}
+                        render={({ open }) => (
+                            <div 
+                                onClick={open}
+                                style={{
+                                    border: '2px dashed #ddd',
+                                    borderRadius: '4px',
+                                    padding: '20px',
+                                    textAlign: 'center',
+                                    cursor: 'pointer',
+                                    minHeight: '120px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexDirection: 'column',
+                                    gap: '10px'
+                                }}
+                            >
+                                {galleryImages.length > 0 ? (
+                                    <>
+                                        {__('Gallery:', 'product-studio')} {galleryImages.length} {__('image(s)', 'product-studio')}
+                                        <div style={{ fontSize: '12px', color: '#666' }}>
+                                            {__('Click to add more', 'product-studio')}
+                                        </div>
+                                    </>
+                                ) : __('Click to add gallery images', 'product-studio')}
+                            </div>
+                        )}
+                    />
+                </MediaUploadCheck>
+            </PluginDocumentSettingPanel>
+
             <PluginDocumentSettingPanel
                 name="page-settings"
                 title={__('Page Settings', 'product-studio')}
@@ -451,29 +524,12 @@ const ProductDataSidebar = () => {
                     label={__('Virtual Product', 'product-studio')}
                     checked={meta._virtual === 'yes'}
                     onChange={(checked) => updateMeta('_virtual', checked ? 'yes' : 'no')}
-                    help={__('No shipping needed', 'product-studio')}
                 />
 
                 <ToggleControl
                     label={__('Downloadable', 'product-studio')}
                     checked={meta._downloadable === 'yes'}
                     onChange={(checked) => updateMeta('_downloadable', checked ? 'yes' : 'no')}
-                />
-
-                <TextareaControl
-                    label={__('Purchase Note', 'product-studio')}
-                    value={meta._purchase_note || ''}
-                    onChange={(value) => updateMeta('_purchase_note', value)}
-                    help={__('Shown after purchase', 'product-studio')}
-                    rows={3}
-                />
-
-                <TextControl
-                    label={__('Menu Order', 'product-studio')}
-                    value={meta.menu_order || '0'}
-                    onChange={(value) => updateMeta('menu_order', value)}
-                    type="number"
-                    help={__('Custom ordering position', 'product-studio')}
                 />
             </PluginDocumentSettingPanel>
         </>
