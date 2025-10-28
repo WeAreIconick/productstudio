@@ -8,11 +8,16 @@ import { useState, useEffect } from '@wordpress/element';
 import './style.scss';
 
 const ProductDataSidebar = () => {
-    // Get current post ID and meta
-    const { postId, meta, postType } = useSelect((select) => ({
+    // Get current post ID, meta, and attributes
+    const { postId, meta, postType, status, date, password, slug, excerpt } = useSelect((select) => ({
         postId: select('core/editor').getCurrentPostId(),
         meta: select('core/editor').getEditedPostAttribute('meta'),
         postType: select('core/editor').getCurrentPostType(),
+        status: select('core/editor').getEditedPostAttribute('status'),
+        date: select('core/editor').getEditedPostAttribute('date'),
+        password: select('core/editor').getEditedPostAttribute('password'),
+        slug: select('core/editor').getEditedPostAttribute('slug'),
+        excerpt: select('core/editor').getEditedPostAttribute('excerpt'),
     }));
 
     // Only show for products
@@ -24,6 +29,7 @@ const ProductDataSidebar = () => {
     useEffect(() => {
         const closeAllPanels = () => {
             const panelNames = [
+                'page-settings',
                 'product-type',
                 'product-gallery',
                 'product-pricing',
@@ -52,11 +58,89 @@ const ProductDataSidebar = () => {
         return () => clearTimeout(timer);
     }, []);
 
+    // Hide WordPress core publish settings
+    useEffect(() => {
+        const hideCoreSettings = () => {
+            // Hide panels with specific text content
+            const panelTexts = [
+                'Edit excerpt',
+                'Excerpt',
+                'Status',
+                'Date',
+                'Schedule',
+                'Slug',
+                'Publish date',
+            ];
+
+            // Find all panel buttons and their parent panels
+            document.querySelectorAll('.components-panel__body-toggle').forEach(button => {
+                const text = button.textContent.trim();
+                if (panelTexts.some(panelText => text.includes(panelText))) {
+                    const parentPanel = button.closest('.components-panel__body');
+                    if (parentPanel && !parentPanel.classList.contains('page-settings-panel') 
+                        && !parentPanel.classList.contains('product-type-panel')
+                        && !parentPanel.classList.contains('product-gallery-panel')
+                        && !parentPanel.classList.contains('product-pricing-panel')
+                        && !parentPanel.classList.contains('product-inventory-panel')
+                        && !parentPanel.classList.contains('product-shipping-panel')
+                        && !parentPanel.classList.contains('product-short-description-panel')
+                        && !parentPanel.classList.contains('product-reviews-panel')
+                        && !parentPanel.classList.contains('product-advanced-panel')) {
+                        parentPanel.style.display = 'none';
+                    }
+                }
+            });
+
+            // Hide specific class names
+            const classSelectors = [
+                'editor-post-excerpt__panel',
+                'editor-post-status__panel',
+                'editor-post-schedule__panel',
+                'editor-post-slug__panel',
+                'editor-post-link__panel',
+                '.components-panel__body-toggle[aria-label*="excerpt"]',
+                '.components-panel__body-toggle[aria-label*="status" i]',
+                '.components-panel__body-toggle[aria-label*="schedule" i]',
+                '.components-panel__body-toggle[aria-label*="date" i]',
+                '.components-panel__body-toggle[aria-label*="slug" i]',
+            ];
+
+            classSelectors.forEach(selector => {
+                try {
+                    const elements = document.querySelectorAll(selector);
+                    elements.forEach(el => {
+                        if (!el.closest('.page-settings-panel, .product-type-panel, .product-gallery-panel, .product-pricing-panel, .product-inventory-panel, .product-shipping-panel, .product-short-description-panel, .product-reviews-panel, .product-advanced-panel')) {
+                            el.style.display = 'none';
+                            if (el.parentElement) {
+                                el.parentElement.style.display = 'none';
+                            }
+                        }
+                    });
+                } catch (e) {
+                    // Ignore invalid selectors
+                }
+            });
+        };
+
+        // Run multiple times to catch elements
+        hideCoreSettings();
+        setTimeout(hideCoreSettings, 100);
+        setTimeout(hideCoreSettings, 500);
+        const timer = setInterval(hideCoreSettings, 1000);
+        
+        return () => clearInterval(timer);
+    }, []);
+
     const { editPost } = useDispatch('core/editor');
 
     // Helper to update meta
     const updateMeta = (key, value) => {
         editPost({ meta: { [key]: value } });
+    };
+    
+    // Helper to update post attributes
+    const updateAttribute = (key, value) => {
+        editPost({ [key]: value });
     };
     
     // Get product type (simple, grouped, external, variable)
@@ -67,8 +151,61 @@ const ProductDataSidebar = () => {
         updateMeta('_product_type', newType);
     };
 
+    // Status options
+    const statusOptions = [
+        { label: __('Draft', 'product-studio'), value: 'draft' },
+        { label: __('Pending', 'product-studio'), value: 'pending' },
+        { label: __('Private', 'product-studio'), value: 'private' },
+        { label: __('Published', 'product-studio'), value: 'publish' },
+    ];
+
     return (
         <>
+            <PluginDocumentSettingPanel
+                name="page-settings"
+                title={__('Page Settings', 'product-studio')}
+                className="page-settings-panel"
+                initialOpen={false}
+            >
+                <TextareaControl
+                    label={__('Excerpt', 'product-studio')}
+                    value={excerpt || ''}
+                    onChange={(value) => updateAttribute('excerpt', value)}
+                    help={__('Write an excerpt for your product', 'product-studio')}
+                    rows={3}
+                />
+
+                <SelectControl
+                    label={__('Status', 'product-studio')}
+                    value={status}
+                    options={statusOptions}
+                    onChange={(value) => updateAttribute('status', value)}
+                />
+
+                <TextControl
+                    label={__('Date', 'product-studio')}
+                    value={date || ''}
+                    onChange={(value) => updateAttribute('date', value)}
+                    type="datetime-local"
+                    help={__('Set the publish date', 'product-studio')}
+                />
+
+                <TextControl
+                    label={__('Slug', 'product-studio')}
+                    value={slug || ''}
+                    onChange={(value) => updateAttribute('slug', value)}
+                    help={__('URL-friendly version of the title', 'product-studio')}
+                />
+
+                <TextControl
+                    label={__('Password', 'product-studio')}
+                    value={password || ''}
+                    onChange={(value) => updateAttribute('password', value)}
+                    type="password"
+                    help={__('Optional password to protect this product', 'product-studio')}
+                />
+            </PluginDocumentSettingPanel>
+
             <PluginDocumentSettingPanel
                 name="product-type"
                 title={__('Product Type', 'product-studio')}
