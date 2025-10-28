@@ -171,45 +171,45 @@ function product_studio_register_meta() {
 add_action('init', 'product_studio_register_meta');
 
 /**
- * Cache REST API taxonomy responses for performance
+ * Optimize taxonomy REST API queries - limit results and hide empty terms
  */
-function product_studio_cache_rest_taxonomy_response($response, $handler, $request) {
+function product_studio_optimize_taxonomy_query($args, $request) {
+    // Limit to 20 terms max for fast initial load
+    $args['number'] = 20;
+    // Hide empty terms to reduce payload
+    $args['hide_empty'] = true;
+    return $args;
+}
+add_filter('rest_product_cat_query', 'product_studio_optimize_taxonomy_query', 10, 2);
+add_filter('rest_product_tag_query', 'product_studio_optimize_taxonomy_query', 10, 2);
+
+/**
+ * Cache REST API taxonomy responses using transients
+ */
+function product_studio_cache_taxonomy_response($response, $handler, $request) {
     $route = $request->get_route();
-    $taxonomies = ['product_cat', 'product_tag'];
     
-    foreach ($taxonomies as $taxonomy) {
-        if (strpos($route, '/wp/v2/' . $taxonomy) !== false && !is_wp_error($response)) {
-            // Cache the response data for 1 hour
-            $cache_key = 'rest_tax_' . $taxonomy . '_' . md5($route . serialize($request->get_query_params()));
-            
+    // Check if this is a taxonomy endpoint
+    if (strpos($route, '/wp/v2/product_cat') === 0 || strpos($route, '/wp/v2/product_tag') === 0) {
+        // Build cache key from route and query params
+        $cache_key = 'rest_tax_' . md5($route . serialize($request->get_query_params()));
+        
+        // Get cached data if available
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return new WP_REST_Response($cached, 200, array('X-Cache-Status' => 'HIT'));
+        }
+        
+        // Cache the response for 1 hour
+        if (!is_wp_error($response) && $response->status === 200) {
             $data = $response->get_data();
-            if (!empty($data) && is_array($data) && count($data) > 50) {
-                // Limit to 50 items
-                $data = array_slice($data, 0, 50);
-                $response->set_data($data);
-            }
-            
             set_transient($cache_key, $data, HOUR_IN_SECONDS);
-            break;
         }
     }
     
     return $response;
 }
-add_filter('rest_post_dispatch', 'product_studio_cache_rest_taxonomy_response', 10, 3);
-
-/**
- * Optimize REST API for taxonomy queries - limit results to improve performance
- */
-function product_studio_optimize_taxonomy_args($args, $request) {
-    // Force limit to 50 terms max
-    $args['number'] = 50;
-    $args['hide_empty'] = true; // Only show terms with posts
-    $args['fields'] = 'all'; // Get all needed fields at once
-    return $args;
-}
-add_filter('rest_product_cat_query', 'product_studio_optimize_taxonomy_args', 10, 2);
-add_filter('rest_product_tag_query', 'product_studio_optimize_taxonomy_args', 10, 2);
+add_filter('rest_post_dispatch', 'product_studio_cache_taxonomy_response', 10, 3);
 
 /**
  * Enqueue sidebar assets
