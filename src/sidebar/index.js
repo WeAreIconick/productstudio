@@ -1,6 +1,6 @@
 import { registerPlugin } from '@wordpress/plugins';
 import { PluginDocumentSettingPanel } from '@wordpress/edit-post';
-import { PanelBody, TextControl, SelectControl, ToggleControl, CheckboxControl, TextareaControl, TextareaControl as Textarea, Button } from '@wordpress/components';
+import { TextControl, SelectControl, ToggleControl, CheckboxControl, TextareaControl, Button } from '@wordpress/components';
 import { MediaUpload, MediaUploadCheck } from '@wordpress/block-editor';
 import { useSelect, useDispatch } from '@wordpress/data';
 import { __ } from '@wordpress/i18n';
@@ -17,13 +17,8 @@ const ProductDataSidebar = () => {
     }
     
     // Get only what we need from the editor - minimize subscriptions
-    const { meta, status, date, password, slug, excerpt } = useSelect((select) => ({
+    const { meta } = useSelect((select) => ({
         meta: select('core/editor').getEditedPostAttribute('meta'),
-        status: select('core/editor').getEditedPostAttribute('status'),
-        date: select('core/editor').getEditedPostAttribute('date'),
-        password: select('core/editor').getEditedPostAttribute('password'),
-        slug: select('core/editor').getEditedPostAttribute('slug'),
-        excerpt: select('core/editor').getEditedPostAttribute('excerpt'),
     }), []);
     
     const { editPost } = useDispatch('core/editor');
@@ -33,20 +28,8 @@ const ProductDataSidebar = () => {
         editPost({ meta: { [key]: value } });
     };
     
-    // Helper to update post attributes
-    const updateAttribute = (key, value) => {
-        editPost({ [key]: value });
-    };
-    
     // Memoize expensive calculations
     const productType = useMemo(() => meta._product_type || 'simple', [meta._product_type]);
-    
-    const statusOptions = useMemo(() => [
-        { label: __('Draft', 'product-studio'), value: 'draft' },
-        { label: __('Pending', 'product-studio'), value: 'pending' },
-        { label: __('Private', 'product-studio'), value: 'private' },
-        { label: __('Published', 'product-studio'), value: 'publish' },
-    ], []);
 
     const galleryImages = useMemo(() => {
         return meta._product_image_gallery ? meta._product_image_gallery.split(',').filter(id => id) : [];
@@ -147,51 +130,6 @@ const ProductDataSidebar = () => {
                         )}
                     />
                 </MediaUploadCheck>
-            </PluginDocumentSettingPanel>
-
-            <PluginDocumentSettingPanel
-                name="page-settings"
-                title={__('Page Settings', 'product-studio')}
-                className="page-settings-panel"
-                initialOpen={false}
-            >
-                <TextareaControl
-                    label={__('Excerpt', 'product-studio')}
-                    value={excerpt || ''}
-                    onChange={(value) => updateAttribute('excerpt', value)}
-                    help={__('Write an excerpt for your product', 'product-studio')}
-                    rows={3}
-                />
-
-                <SelectControl
-                    label={__('Status', 'product-studio')}
-                    value={status}
-                    options={statusOptions}
-                    onChange={(value) => updateAttribute('status', value)}
-                />
-
-                <TextControl
-                    label={__('Date', 'product-studio')}
-                    value={date || ''}
-                    onChange={(value) => updateAttribute('date', value)}
-                    type="datetime-local"
-                    help={__('Set the publish date', 'product-studio')}
-                />
-
-                <TextControl
-                    label={__('Slug', 'product-studio')}
-                    value={slug || ''}
-                    onChange={(value) => updateAttribute('slug', value)}
-                    help={__('URL-friendly version of the title', 'product-studio')}
-                />
-
-                <TextControl
-                    label={__('Password', 'product-studio')}
-                    value={password || ''}
-                    onChange={(value) => updateAttribute('password', value)}
-                    type="password"
-                    help={__('Optional password to protect this product', 'product-studio')}
-                />
             </PluginDocumentSettingPanel>
 
             <PluginDocumentSettingPanel
