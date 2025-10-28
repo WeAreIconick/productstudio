@@ -1,6 +1,6 @@
 import { registerPlugin } from '@wordpress/plugins';
 import { PluginDocumentSettingPanel } from '@wordpress/edit-post';
-import { PanelBody, TextControl, SelectControl, ToggleControl, TextareaControl, TextareaControl as Textarea, Button } from '@wordpress/components';
+import { PanelBody, TextControl, SelectControl, ToggleControl, CheckboxControl, TextareaControl, TextareaControl as Textarea, Button } from '@wordpress/components';
 import { MediaUpload, MediaUploadCheck } from '@wordpress/block-editor';
 import { useSelect, useDispatch } from '@wordpress/data';
 import { __ } from '@wordpress/i18n';
@@ -520,13 +520,13 @@ const ProductDataSidebar = () => {
                 className="product-advanced-panel"
                 initialOpen={false}
             >
-                <ToggleControl
+                <CheckboxControl
                     label={__('Virtual Product', 'product-studio')}
                     checked={meta._virtual === 'yes'}
                     onChange={(checked) => updateMeta('_virtual', checked ? 'yes' : 'no')}
                 />
 
-                <ToggleControl
+                <CheckboxControl
                     label={__('Downloadable', 'product-studio')}
                     checked={meta._downloadable === 'yes'}
                     onChange={(checked) => updateMeta('_downloadable', checked ? 'yes' : 'no')}
