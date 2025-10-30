@@ -1,26 +1,144 @@
 import { registerPlugin } from '@wordpress/plugins';
 import { PluginDocumentSettingPanel } from '@wordpress/edit-post';
-import { TextControl, SelectControl, ToggleControl, CheckboxControl, TextareaControl, Button, Spinner } from '@wordpress/components';
+import { PanelBody, TextControl, SelectControl, ToggleControl, TextareaControl, TextareaControl as Textarea, Button, FormTokenField } from '@wordpress/components';
 import { MediaUpload, MediaUploadCheck } from '@wordpress/block-editor';
 import { useSelect, useDispatch } from '@wordpress/data';
 import { __ } from '@wordpress/i18n';
-import { useMemo } from '@wordpress/element';
+import { useState, useEffect, useMemo } from '@wordpress/element';
 import './style.scss';
 
-const ProductDataSidebar = () => {
-    // Get post type first to early exit
-    const postType = useSelect((select) => select('core/editor').getCurrentPostType(), []);
+// Optimized Taxonomy Selector Component with lazy loading
+const TaxonomySelector = ({ taxonomy, label, help }) => {
+    const [searchTerm, setSearchTerm] = useState('');
     
+    const { postId, postType, selectedTerms } = useSelect((select) => {
+        const { getCurrentPostId, getCurrentPostType, getEditedPostAttribute } = select('core/editor');
+        const taxonomyTerms = getEditedPostAttribute(taxonomy) || [];
+        
+        return {
+            postId: getCurrentPostId(),
+            postType: getCurrentPostType(),
+            selectedTerms: taxonomyTerms
+        };
+    }, [taxonomy]);
+    
+    // Only load terms when needed - selected terms + search results
+    const { availableTerms, selectedTermObjects } = useSelect((select) => {
+        const { getEntityRecords } = select('core');
+        
+        // Load selected terms to display their names (only if we have selections)
+        const selectedTermsData = selectedTerms.length > 0
+            ? getEntityRecords('taxonomy', taxonomy, {
+                include: selectedTerms,
+                per_page: 100,
+                _fields: 'id,name', // Only load what we need
+            })
+            : [];
+        
+        // Only search if user types 3+ characters
+        const searchResults = searchTerm.length >= 3
+            ? getEntityRecords('taxonomy', taxonomy, {
+                search: searchTerm,
+                per_page: 20,
+                _fields: 'id,name', // Only load what we need
+            })
+            : [];
+        
+        return {
+            selectedTermObjects: selectedTermsData || [],
+            availableTerms: searchResults || []
+        };
+    }, [taxonomy, selectedTerms, searchTerm]);
+    
+    const { editPost } = useDispatch('core/editor');
+    
+    // Get term names for the selected IDs
+    const selectedTermNames = useMemo(() => {
+        return selectedTermObjects.map(term => term.name);
+    }, [selectedTermObjects]);
+    
+    // Combine selected and search results, removing duplicates
+    const suggestions = useMemo(() => {
+        const combined = [...selectedTermObjects, ...availableTerms];
+        const unique = combined.filter((term, index, self) => 
+            index === self.findIndex(t => t.id === term.id)
+        );
+        return unique.map(term => term.name);
+    }, [selectedTermObjects, availableTerms]);
+    
+    const handleTokenChange = (tokens) => {
+        // Map names back to IDs
+        const allTerms = [...selectedTermObjects, ...availableTerms];
+        const termIds = tokens.map(tokenName => {
+            const term = allTerms.find(t => t.name === tokenName);
+            return term ? term.id : null;
+        }).filter(Boolean);
+        
+        editPost({ [taxonomy]: termIds });
+    };
+    
+    return (
+        <div style={{ marginBottom: '16px' }}>
+            <FormTokenField
+                label={label}
+                value={selectedTermNames}
+                suggestions={suggestions}
+                onChange={handleTokenChange}
+                onInputChange={setSearchTerm}
+                placeholder={__('Type to search (3+ chars)...', 'product-studio')}
+                maxSuggestions={20}
+                __experimentalShowHowTo={false}
+            />
+            {help && <p className="components-base-control__help">{help}</p>}
+        </div>
+    );
+};
+
+const ProductDataSidebar = () => {
+    // Get current post ID and meta
+    const { postId, meta, postType } = useSelect((select) => ({
+        postId: select('core/editor').getCurrentPostId(),
+        meta: select('core/editor').getEditedPostAttribute('meta'),
+        postType: select('core/editor').getCurrentPostType(),
+    }));
+
     // Only show for products
     if (postType !== 'product') {
         return null;
     }
     
-    // Get only what we need from the editor - minimize subscriptions
-    const { meta } = useSelect((select) => ({
-        meta: select('core/editor').getEditedPostAttribute('meta'),
-    }), []);
-    
+    // Close all panels on mount
+    useEffect(() => {
+        const closeAllPanels = () => {
+            const panelNames = [
+                'product-type',
+                'product-gallery',
+                'product-pricing',
+                'product-inventory',
+                'product-shipping',
+                'product-short-description',
+                'product-reviews',
+                'product-advanced'
+            ];
+            
+            panelNames.forEach((name, index) => {
+                setTimeout(() => {
+                    const toggle = document.querySelector(`.components-panel__body-toggle[aria-controls*="${name}"]`);
+                    if (toggle) {
+                        // Close if expanded
+                        if (toggle.getAttribute('aria-expanded') === 'true') {
+                            toggle.click();
+                        }
+                    }
+                }, 100 * (index + 1));
+            });
+        };
+        
+        // Run after a delay to ensure component is mounted
+        const timer = setTimeout(closeAllPanels, 300);
+        return () => clearTimeout(timer);
+    }, []);
+
     const { editPost } = useDispatch('core/editor');
 
     // Helper to update meta
@@ -28,110 +146,16 @@ const ProductDataSidebar = () => {
         editPost({ meta: { [key]: value } });
     };
     
-    // Memoize expensive calculations
-    const productType = useMemo(() => meta._product_type || 'simple', [meta._product_type]);
-
-    const galleryImages = useMemo(() => {
-        return meta._product_image_gallery ? meta._product_image_gallery.split(',').filter(id => id) : [];
-    }, [meta._product_image_gallery]);
+    // Get product type (simple, grouped, external, variable)
+    const productType = meta._product_type || 'simple';
     
     // Helper to update product type
     const updateProductType = (newType) => {
         updateMeta('_product_type', newType);
     };
 
-    // Helper to update gallery
-    const updateGallery = (images) => {
-        updateMeta('_product_image_gallery', images.join(','));
-    };
-
     return (
         <>
-            <PluginDocumentSettingPanel
-                name="product-images"
-                title={__('Product Images', 'product-studio')}
-                className="product-images-panel"
-                initialOpen={false}
-            >
-                <MediaUploadCheck>
-                    <MediaUpload
-                        onSelect={(media) => {
-                            updateMeta('_thumbnail_id', media.id.toString());
-                        }}
-                        allowedTypes={['image']}
-                        value={parseInt(meta._thumbnail_id || 0)}
-                        render={({ open }) => (
-                            <div 
-                                onClick={open}
-                                style={{
-                                    border: '2px dashed #ddd',
-                                    borderRadius: '4px',
-                                    padding: '20px',
-                                    textAlign: 'center',
-                                    cursor: 'pointer',
-                                    marginBottom: '16px',
-                                    minHeight: '120px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    flexDirection: 'column',
-                                    gap: '10px'
-                                }}
-                            >
-                                {meta._thumbnail_id ? (
-                                    <>
-                                        {__('Product image ID:', 'product-studio')} {meta._thumbnail_id}
-                                        <div style={{ fontSize: '12px', color: '#666' }}>
-                                            {__('Click to replace', 'product-studio')}
-                                        </div>
-                                    </>
-                                ) : __('Click to add product image', 'product-studio')}
-                            </div>
-                        )}
-                    />
-                </MediaUploadCheck>
-
-                <MediaUploadCheck>
-                    <MediaUpload
-                        onSelect={(media) => {
-                            const newGallery = [...galleryImages, media.id.toString()];
-                            updateGallery(newGallery);
-                        }}
-                        allowedTypes={['image']}
-                        multiple={true}
-                        gallery
-                        value={galleryImages.map(id => parseInt(id))}
-                        render={({ open }) => (
-                            <div 
-                                onClick={open}
-                                style={{
-                                    border: '2px dashed #ddd',
-                                    borderRadius: '4px',
-                                    padding: '20px',
-                                    textAlign: 'center',
-                                    cursor: 'pointer',
-                                    minHeight: '120px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    flexDirection: 'column',
-                                    gap: '10px'
-                                }}
-                            >
-                                {galleryImages.length > 0 ? (
-                                    <>
-                                        {__('Gallery:', 'product-studio')} {galleryImages.length} {__('image(s)', 'product-studio')}
-                                        <div style={{ fontSize: '12px', color: '#666' }}>
-                                            {__('Click to add more', 'product-studio')}
-                                        </div>
-                                    </>
-                                ) : __('Click to add gallery images', 'product-studio')}
-                            </div>
-                        )}
-                    />
-                </MediaUploadCheck>
-            </PluginDocumentSettingPanel>
-
             <PluginDocumentSettingPanel
                 name="product-type"
                 title={__('Product Type', 'product-studio')}
@@ -149,21 +173,6 @@ const ProductDataSidebar = () => {
                     ]}
                     onChange={updateProductType}
                     help={__('Choose the product type', 'product-studio')}
-                />
-            </PluginDocumentSettingPanel>
-
-            <PluginDocumentSettingPanel
-                name="product-short-description"
-                title={__('Short Description', 'product-studio')}
-                className="product-short-description-panel"
-                initialOpen={false}
-            >
-                <TextareaControl
-                    label={__('Product Short Description', 'product-studio')}
-                    value={meta._excerpt || ''}
-                    onChange={(value) => updateMeta('_excerpt', value)}
-                    help={__('This appears below the product name. Used in product listings and search results.', 'product-studio')}
-                    rows={5}
                 />
             </PluginDocumentSettingPanel>
 
@@ -354,6 +363,21 @@ const ProductDataSidebar = () => {
             )}
 
             <PluginDocumentSettingPanel
+                name="product-short-description"
+                title={__('Short Description', 'product-studio')}
+                className="product-short-description-panel"
+                initialOpen={false}
+            >
+                <TextareaControl
+                    label={__('Product Short Description', 'product-studio')}
+                    value={meta._excerpt || ''}
+                    onChange={(value) => updateMeta('_excerpt', value)}
+                    help={__('This appears below the product name. Used in product listings and search results.', 'product-studio')}
+                    rows={5}
+                />
+            </PluginDocumentSettingPanel>
+
+            <PluginDocumentSettingPanel
                 name="product-reviews"
                 title={__('Reviews', 'product-studio')}
                 className="product-reviews-panel"
@@ -373,16 +397,59 @@ const ProductDataSidebar = () => {
                 className="product-advanced-panel"
                 initialOpen={false}
             >
-                <CheckboxControl
+                <ToggleControl
                     label={__('Virtual Product', 'product-studio')}
                     checked={meta._virtual === 'yes'}
                     onChange={(checked) => updateMeta('_virtual', checked ? 'yes' : 'no')}
+                    help={__('No shipping needed', 'product-studio')}
                 />
 
-                <CheckboxControl
+                <ToggleControl
                     label={__('Downloadable', 'product-studio')}
                     checked={meta._downloadable === 'yes'}
                     onChange={(checked) => updateMeta('_downloadable', checked ? 'yes' : 'no')}
+                />
+
+                <TextareaControl
+                    label={__('Purchase Note', 'product-studio')}
+                    value={meta._purchase_note || ''}
+                    onChange={(value) => updateMeta('_purchase_note', value)}
+                    help={__('Shown after purchase', 'product-studio')}
+                    rows={3}
+                />
+
+                <TextControl
+                    label={__('Menu Order', 'product-studio')}
+                    value={meta.menu_order || '0'}
+                    onChange={(value) => updateMeta('menu_order', value)}
+                    type="number"
+                    help={__('Custom ordering position', 'product-studio')}
+                />
+            </PluginDocumentSettingPanel>
+
+            <PluginDocumentSettingPanel
+                name="product-categories"
+                title={__('Categories', 'product-studio')}
+                className="product-categories-panel"
+                initialOpen={false}
+            >
+                <TaxonomySelector
+                    taxonomy="product_cat"
+                    label={__('Product Categories', 'product-studio')}
+                    help={__('Search and select categories. Type at least 3 characters to search.', 'product-studio')}
+                />
+            </PluginDocumentSettingPanel>
+
+            <PluginDocumentSettingPanel
+                name="product-tags"
+                title={__('Tags', 'product-studio')}
+                className="product-tags-panel"
+                initialOpen={false}
+            >
+                <TaxonomySelector
+                    taxonomy="product_tag"
+                    label={__('Product Tags', 'product-studio')}
+                    help={__('Search and select tags. Type at least 3 characters to search.', 'product-studio')}
                 />
             </PluginDocumentSettingPanel>
         </>

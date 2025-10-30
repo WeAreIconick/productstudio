@@ -133,7 +133,6 @@ add_action('add_meta_boxes', function() {
 function product_studio_register_meta() {
     $meta_fields = [
         '_product_type' => 'string',
-        '_thumbnail_id' => 'string',
         '_product_image_gallery' => 'string',
         '_regular_price' => 'string',
         '_sale_price' => 'string',
@@ -171,47 +170,6 @@ function product_studio_register_meta() {
 add_action('init', 'product_studio_register_meta');
 
 /**
- * Optimize taxonomy REST API queries - limit results and hide empty terms
- */
-function product_studio_optimize_taxonomy_query($args, $request) {
-    // Limit to 20 terms max for fast initial load
-    $args['number'] = 20;
-    // Hide empty terms to reduce payload
-    $args['hide_empty'] = true;
-    return $args;
-}
-add_filter('rest_product_cat_query', 'product_studio_optimize_taxonomy_query', 10, 2);
-add_filter('rest_product_tag_query', 'product_studio_optimize_taxonomy_query', 10, 2);
-
-/**
- * Cache REST API taxonomy responses using transients
- */
-function product_studio_cache_taxonomy_response($response, $handler, $request) {
-    $route = $request->get_route();
-    
-    // Check if this is a taxonomy endpoint
-    if (strpos($route, '/wp/v2/product_cat') === 0 || strpos($route, '/wp/v2/product_tag') === 0) {
-        // Build cache key from route and query params
-        $cache_key = 'rest_tax_' . md5($route . serialize($request->get_query_params()));
-        
-        // Get cached data if available
-        $cached = get_transient($cache_key);
-        if ($cached !== false) {
-            return new WP_REST_Response($cached, 200, array('X-Cache-Status' => 'HIT'));
-        }
-        
-        // Cache the response for 1 hour
-        if (!is_wp_error($response) && $response->status === 200) {
-            $data = $response->get_data();
-            set_transient($cache_key, $data, HOUR_IN_SECONDS);
-        }
-    }
-    
-    return $response;
-}
-add_filter('rest_post_dispatch', 'product_studio_cache_taxonomy_response', 10, 3);
-
-/**
  * Enqueue sidebar assets
  */
 function product_studio_enqueue_assets() {
@@ -246,5 +204,88 @@ function product_studio_enqueue_assets() {
     wp_set_script_translations('product-studio-sidebar', 'product-studio');
 }
 add_action('enqueue_block_editor_assets', 'product_studio_enqueue_assets');
+
+/**
+ * Hide default taxonomy panels and add our optimized ones
+ */
+function product_studio_hide_default_taxonomy_panels() {
+    $screen = get_current_screen();
+    if (!$screen || $screen->post_type !== 'product') {
+        return;
+    }
+    ?>
+    <script>
+    (function() {
+        // Wait for the editor to be ready
+        if (window.wp && window.wp.data && window.wp.editPost) {
+            // Remove default taxonomy panels
+            const { dispatch, select } = window.wp.data;
+            
+            // Use a more reliable method to hide panels
+            window.addEventListener('load', function() {
+                setTimeout(function() {
+                    // Hide default category panel
+                    const categoryPanel = document.querySelector('[aria-label="Categories"]');
+                    if (categoryPanel) {
+                        categoryPanel.style.display = 'none';
+                    }
+                    
+                    // Hide default tags panel
+                    const tagsPanel = document.querySelector('[aria-label="Tags"]');
+                    if (tagsPanel) {
+                        tagsPanel.style.display = 'none';
+                    }
+                    
+                    // Hide any product_cat panel
+                    const productCatPanel = document.querySelector('[aria-label*="Product categor"]');
+                    if (productCatPanel) {
+                        productCatPanel.style.display = 'none';
+                    }
+                    
+                    // Hide any product_tag panel
+                    const productTagPanel = document.querySelector('[aria-label*="Product tag"]');
+                    if (productTagPanel) {
+                        productTagPanel.style.display = 'none';
+                    }
+                }, 500);
+            });
+        }
+    })();
+    </script>
+    <style>
+        /* Hide default taxonomy panels via CSS as backup */
+        .components-panel__body.is-opened[aria-label*="Categor"],
+        .components-panel__body.is-opened[aria-label*="categor"],
+        .components-panel__body.is-opened[aria-label*="Tags"],
+        .components-panel__body.is-opened[aria-label*="tags"],
+        .editor-post-taxonomies__hierarchical-terms-choice,
+        .editor-post-taxonomies__flat-term-selector {
+            display: none !important;
+        }
+        
+        /* Show our custom panels */
+        .product-categories-panel,
+        .product-tags-panel {
+            display: block !important;
+        }
+    </style>
+    <?php
+}
+add_action('admin_head', 'product_studio_hide_default_taxonomy_panels');
+
+/**
+ * Optimize REST API responses for taxonomies
+ * Only return what we need to improve performance
+ */
+function product_studio_optimize_taxonomy_rest($args, $request) {
+    // Limit fields returned to improve performance
+    if (isset($request['_fields']) && $request['_fields'] === 'id,name') {
+        $args['fields'] = 'id=>name';
+    }
+    
+    return $args;
+}
+add_filter('rest_product_cat_query', 'product_studio_optimize_taxonomy_rest', 10, 2);
+add_filter('rest_product_tag_query', 'product_studio_optimize_taxonomy_rest', 10, 2);
 
 
