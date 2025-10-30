@@ -205,87 +205,85 @@ function product_studio_enqueue_assets() {
 }
 add_action('enqueue_block_editor_assets', 'product_studio_enqueue_assets');
 
-/**
- * Hide default taxonomy panels and add our optimized ones
- */
-function product_studio_hide_default_taxonomy_panels() {
-    $screen = get_current_screen();
-    if (!$screen || $screen->post_type !== 'product') {
-        return;
-    }
-    ?>
-    <script>
-    (function() {
-        // Wait for the editor to be ready
-        if (window.wp && window.wp.data && window.wp.editPost) {
-            // Remove default taxonomy panels
-            const { dispatch, select } = window.wp.data;
-            
-            // Use a more reliable method to hide panels
-            window.addEventListener('load', function() {
-                setTimeout(function() {
-                    // Hide default category panel
-                    const categoryPanel = document.querySelector('[aria-label="Categories"]');
-                    if (categoryPanel) {
-                        categoryPanel.style.display = 'none';
-                    }
-                    
-                    // Hide default tags panel
-                    const tagsPanel = document.querySelector('[aria-label="Tags"]');
-                    if (tagsPanel) {
-                        tagsPanel.style.display = 'none';
-                    }
-                    
-                    // Hide any product_cat panel
-                    const productCatPanel = document.querySelector('[aria-label*="Product categor"]');
-                    if (productCatPanel) {
-                        productCatPanel.style.display = 'none';
-                    }
-                    
-                    // Hide any product_tag panel
-                    const productTagPanel = document.querySelector('[aria-label*="Product tag"]');
-                    if (productTagPanel) {
-                        productTagPanel.style.display = 'none';
-                    }
-                }, 500);
-            });
-        }
-    })();
-    </script>
-    <style>
-        /* Hide default taxonomy panels via CSS as backup */
-        .components-panel__body.is-opened[aria-label*="Categor"],
-        .components-panel__body.is-opened[aria-label*="categor"],
-        .components-panel__body.is-opened[aria-label*="Tags"],
-        .components-panel__body.is-opened[aria-label*="tags"],
-        .editor-post-taxonomies__hierarchical-terms-choice,
-        .editor-post-taxonomies__flat-term-selector {
-            display: none !important;
-        }
-        
-        /* Show our custom panels */
-        .product-categories-panel,
-        .product-tags-panel {
-            display: block !important;
-        }
-    </style>
-    <?php
-}
-add_action('admin_head', 'product_studio_hide_default_taxonomy_panels');
 
 /**
- * Optimize REST API responses for taxonomies
- * Only return what we need to improve performance
+ * Optimize taxonomy REST API queries - limit results and hide empty terms
  */
-function product_studio_optimize_taxonomy_rest($args, $request) {
-    // Limit fields returned to improve performance
+function product_studio_optimize_taxonomy_query($args, $request) {
+    // Limit to 20 terms max for fast initial load
+    $args['number'] = 20;
+    // Hide empty terms to reduce payload
+    $args['hide_empty'] = true;
+    // Only return id and name fields if requested (reduces payload significantly)
     if (isset($request['_fields']) && $request['_fields'] === 'id,name') {
         $args['fields'] = 'id=>name';
     }
-    
     return $args;
 }
-add_filter('rest_product_cat_query', 'product_studio_optimize_taxonomy_rest', 10, 2);
-add_filter('rest_product_tag_query', 'product_studio_optimize_taxonomy_rest', 10, 2);
+add_filter('rest_product_cat_query', 'product_studio_optimize_taxonomy_query', 10, 2);
+add_filter('rest_product_tag_query', 'product_studio_optimize_taxonomy_query', 10, 2);
+
+// Add brands taxonomy support if it exists
+add_filter('rest_pa_brand_query', 'product_studio_optimize_taxonomy_query', 10, 2);
+
+/**
+ * Cache REST API taxonomy responses using transients for 1 hour
+ */
+function product_studio_cache_taxonomy_response($response, $handler, $request) {
+    $route = $request->get_route();
+    
+    // Check if this is a taxonomy endpoint we want to cache
+    $taxonomies_to_cache = ['product_cat', 'product_tag', 'pa_brand'];
+    $should_cache = false;
+    foreach ($taxonomies_to_cache as $taxonomy) {
+        if (strpos($route, '/wp/v2/' . $taxonomy) === 0) {
+            $should_cache = true;
+            break;
+        }
+    }
+    
+    if (!$should_cache || is_wp_error($response)) {
+        return $response;
+    }
+    
+    // Build cache key from route and query params
+    $cache_key = 'rest_tax_' . md5($route . serialize($request->get_query_params()));
+    
+    // Get cached data if available
+    $cached = get_transient($cache_key);
+    if ($cached !== false) {
+        return new WP_REST_Response($cached, 200, array('X-Cache-Status' => 'HIT'));
+    }
+    
+    // Cache the response for 1 hour
+    if ($response->status === 200) {
+        $data = $response->get_data();
+        set_transient($cache_key, $data, HOUR_IN_SECONDS);
+    }
+    
+    return $response;
+}
+add_filter('rest_post_dispatch', 'product_studio_cache_taxonomy_response', 10, 3);
+
+/**
+ * Clear taxonomy cache when terms are modified
+ */
+function product_studio_clear_taxonomy_cache($term_id, $taxonomy) {
+    $taxonomies_to_clear = ['product_cat', 'product_tag', 'pa_brand'];
+    if (in_array($taxonomy, $taxonomies_to_clear)) {
+        // Clear all taxonomy caches for this taxonomy by deleting all transient keys with our prefix
+        global $wpdb;
+        // WordPress stores transients with timeout suffix, so we need to match both transient and transient_timeout
+        $pattern = $wpdb->esc_like('_transient_rest_tax_') . '%';
+        $wpdb->query($wpdb->prepare(
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+            $pattern,
+            str_replace('_transient_', '_transient_timeout_', $pattern)
+        ));
+    }
+}
+add_action('created_term', 'product_studio_clear_taxonomy_cache', 10, 2);
+add_action('edited_term', 'product_studio_clear_taxonomy_cache', 10, 2);
+add_action('delete_term', 'product_studio_clear_taxonomy_cache', 10, 2);
 
 
